@@ -59,9 +59,6 @@ pub struct WinHotKeyEvent {
     /// Id of the associated [`HotKey`].
     pub id: u32,
 
-    /// Name of the associated [`HotKey`] if available
-    pub name: Option<String>,
-
     /// State of the associated [`HotKey`].
     pub state: HotKeyState,
 }
@@ -79,11 +76,6 @@ impl WinHotKeyEvent {
     /// Returns the id of the associated [`HotKey`].
     pub fn id(&self) -> u32 {
         self.id
-    }
-
-    /// Returns the name of the associated [`HotKey`] if exists
-    pub fn name(&self) -> Option<String> {
-        self.name.clone()
     }
 
     /// Returns the state of the associated [`HotKey`].

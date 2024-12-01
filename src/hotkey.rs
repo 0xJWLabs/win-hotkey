@@ -53,8 +53,6 @@ pub struct HotKey {
     pub key: Code,
     /// The hotkey id.
     pub id: u32,
-    /// The hotkey name.
-    pub name: Option<String>,
 }
 
 #[cfg(feature = "serde")]
@@ -83,7 +81,7 @@ impl serde::Serialize for HotKey {
 impl HotKey {
     /// Creates a new hotkey to define keyboard shortcuts throughout your application.
     /// Only [`Modifiers::ALT`], [`Modifiers::SHIFT`], [`Modifiers::CONTROL`], and [`Modifiers::SUPER`]
-    pub fn new(mods: Option<Modifiers>, key: Code, name: Option<String>) -> Self {
+    pub fn new(mods: Option<Modifiers>, key: Code) -> Self {
         let mut mods = mods.unwrap_or_else(Modifiers::empty);
         if mods.contains(Modifiers::META) {
             mods.remove(Modifiers::META);
@@ -94,7 +92,6 @@ impl HotKey {
             mods,
             key,
             id: mods.bits() << 16 | key as u32,
-            name,
         }
     }
 
@@ -102,10 +99,6 @@ impl HotKey {
     /// which is a hash of the string represention of modifiers and key within this hotKey.
     pub fn id(&self) -> u32 {
         self.id
-    }
-
-    pub fn name(&self) -> Option<String> {
-        self.name.clone()
     }
 
     /// Returns `true` if this [`Code`] and [`Modifiers`] matches this hotkey.
@@ -169,16 +162,8 @@ impl TryFrom<String> for HotKey {
     }
 }
 
-fn parse_hotkey(hotkey_str: &str) -> Result<HotKey, HotKeyParseError> {
-    // Step 1: Split the input into name and hotkey parts.
-    let mut parts = hotkey_str.splitn(2, '<'); // Split into at most two parts
-
-    // Extract name (part before '<') and hotkey (part after '<').
-    let name_part = parts.next().unwrap_or("").trim(); // Name part
-    let hotkey_part = parts.next().unwrap_or("").trim_end_matches('>'); // Hotkey part
-
-    // Step 2: Parse the hotkey part (inside < >).
-    let tokens = hotkey_part.split('+').collect::<Vec<&str>>();
+fn parse_hotkey(hotkey: &str) -> Result<HotKey, HotKeyParseError> {
+    let tokens = hotkey.split('+').collect::<Vec<&str>>();
 
     let mut mods = Modifiers::empty();
     let mut key = None;
@@ -194,12 +179,17 @@ fn parse_hotkey(hotkey_str: &str) -> Result<HotKey, HotKeyParseError> {
                 let token = raw.trim();
 
                 if token.is_empty() {
-                    return Err(HotKeyParseError::EmptyToken(hotkey_part.to_string()));
+                    return Err(HotKeyParseError::EmptyToken(hotkey.to_string()));
                 }
 
                 if key.is_some() {
-                    // More than one key was found, invalid hotkey format
-                    return Err(HotKeyParseError::InvalidFormat(hotkey_part.to_string()));
+                    // At this point we have parsed the modifiers and a main key, so by reaching
+                    // this code, the function either received more than one main key or
+                    //  the hotkey is not in the right order
+                    // examples:
+                    // 1. "Ctrl+Shift+C+A" => only one main key should be allowd.
+                    // 2. "Ctrl+C+Shift" => wrong order
+                    return Err(HotKeyParseError::InvalidFormat(hotkey.to_string()));
                 }
 
                 match token.to_uppercase().as_str() {
@@ -226,12 +216,7 @@ fn parse_hotkey(hotkey_str: &str) -> Result<HotKey, HotKeyParseError> {
     // Step 3: Create the HotKey struct with the optional name
     Ok(HotKey::new(
         Some(mods),
-        key.ok_or_else(|| HotKeyParseError::InvalidFormat(hotkey_part.to_string()))?,
-        if name_part.is_empty() {
-            None
-        } else {
-            Some(name_part.to_string())
-        }, // Pass the extracted name as an Optional<String>
+        key.ok_or_else(|| HotKeyParseError::InvalidFormat(hotkey.to_string()))?,
     ))
 }
 

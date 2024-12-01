@@ -2,10 +2,7 @@ use crate::hotkey::HotKey;
 use crate::WinHotKeyEvent;
 use keyboard_types::Code;
 use keyboard_types::Modifiers;
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
 use std::ptr;
-use std::sync::Mutex;
 use windows_sys::Win32::Foundation::ERROR_HOTKEY_ALREADY_REGISTERED;
 use windows_sys::Win32::Foundation::HWND;
 use windows_sys::Win32::Foundation::LPARAM;
@@ -26,25 +23,19 @@ use windows_sys::Win32::UI::WindowsAndMessaging::WS_EX_TOOLWINDOW;
 use windows_sys::Win32::UI::WindowsAndMessaging::WS_EX_TRANSPARENT;
 use windows_sys::Win32::UI::WindowsAndMessaging::WS_OVERLAPPED;
 
-pub struct SendHWND(HWND);
-unsafe impl Send for SendHWND {}
-
-pub static HOTKEYS: Lazy<Mutex<HashMap<u32, Option<String>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-
 pub struct WinHotKeyManager {
-    hwnd: SendHWND,
+    hwnd: HWND,
 }
 
 impl Drop for WinHotKeyManager {
     fn drop(&mut self) {
-        unsafe { DestroyWindow(self.hwnd.0) };
+        unsafe { DestroyWindow(self.hwnd) };
     }
 }
 
 impl WinHotKeyManager {
     pub fn new() -> crate::Result<Self> {
-        let class_name = encode_wide("win_hotkey_app");
+        let class_name = encode_wide("global_hotkey_app");
         unsafe {
             let hinstance = get_instance_handle();
 
@@ -83,9 +74,7 @@ impl WinHotKeyManager {
                 return Err(crate::Error::OsError(std::io::Error::last_os_error()));
             }
 
-            Ok(Self {
-                hwnd: SendHWND(hwnd),
-            })
+            Ok(Self { hwnd })
         }
     }
 
@@ -108,8 +97,7 @@ impl WinHotKeyManager {
         match key_to_vk(&hotkey.key) {
             Some(vk_code) => {
                 let result =
-                    unsafe { RegisterHotKey(self.hwnd.0, hotkey.id() as _, mods, vk_code as _) };
-                add_hotkey(hotkey.id(), hotkey.name());
+                    unsafe { RegisterHotKey(self.hwnd, hotkey.id() as _, mods, vk_code as _) };
                 if result == 0 {
                     let error = std::io::Error::last_os_error();
 
@@ -138,8 +126,7 @@ impl WinHotKeyManager {
     }
 
     pub fn unregister(&self, hotkey: HotKey) -> crate::Result<()> {
-        let result = unsafe { UnregisterHotKey(self.hwnd.0, hotkey.id() as _) };
-        remove_hotkey(hotkey.id());
+        let result = unsafe { UnregisterHotKey(self.hwnd, hotkey.id() as _) };
         if result == 0 {
             return Err(crate::Error::FailedToUnRegister(hotkey));
         }
@@ -168,14 +155,9 @@ unsafe extern "system" fn win_hotkey_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     if msg == WM_HOTKEY {
-        let hotkeys = &*HOTKEYS.lock().unwrap();
-        let name = hotkeys.get(&(wparam as _)).and_then(|n| n.clone());
-
-        let _ = hotkeys;
         WinHotKeyEvent::send(WinHotKeyEvent {
             id: wparam as _,
             state: crate::HotKeyState::Pressed,
-            name: name.clone(),
         });
         std::thread::spawn(move || loop {
             let state = GetAsyncKeyState(HIWORD(lparam as u32) as i32);
@@ -183,7 +165,6 @@ unsafe extern "system" fn win_hotkey_proc(
                 WinHotKeyEvent::send(WinHotKeyEvent {
                     id: wparam as _,
                     state: crate::HotKeyState::Released,
-                    name: name.clone(),
                 });
                 break;
             }
@@ -203,21 +184,6 @@ pub fn encode_wide<S: AsRef<std::ffi::OsStr>>(string: S) -> Vec<u16> {
     std::os::windows::prelude::OsStrExt::encode_wide(string.as_ref())
         .chain(std::iter::once(0))
         .collect()
-}
-
-fn add_hotkey(key: u32, value: Option<String>) {
-    let mut hotkeys = HOTKEYS.lock().unwrap();
-    hotkeys.insert(key, value);
-
-    drop(hotkeys);
-}
-
-fn remove_hotkey(key: u32) {
-    let mut hotkeys = HOTKEYS.lock().unwrap();
-
-    if hotkeys.contains_key(&key) {
-        hotkeys.remove(&key);
-    }
 }
 
 pub fn get_instance_handle() -> windows_sys::Win32::Foundation::HMODULE {
