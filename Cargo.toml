@@ -1,6 +1,7 @@
 [package]
 name = "win-hotkey"
 version = "0.1.0"
+description = "Global hotkeys for Desktop Applications on Windows"
 edition = "2021"
 keywords = ["windowing", "window-hotkey", "hotkey"]
 license = "Apache-2.0"
