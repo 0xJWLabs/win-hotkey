@@ -1,118 +1,174 @@
-#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::doc_lazy_continuation)]
+#[cfg(windows)]
+pub mod error;
+#[cfg(windows)]
+pub mod keys;
+#[cfg(windows)]
+pub mod single_thread;
+#[cfg(all(windows, feature = "thread_safe"))]
+pub mod thread_safe;
 
-//! win_hotkey lets you register Global HotKeys for Desktop Applications.
-//!
-//! # Example
-//!
-//! ```no_run
-//! use win_hotkey::{WinHotKeyManager, hotkey::{HotKey, Modifiers, Code}};
-//!
-//! // initialize the hotkeys manager
-//! let manager = WinHotKeyManager::new().unwrap();
-//!
-//! // construct the hotkey
-//! let hotkey = HotKey::new(Some(Modifiers::SHIFT), Code::KeyD);
-//!
-//! // register it
-//! manager.register(hotkey);
-//! ```
-//!
-//!
-//! # Processing global hotkey events
-//!
-//! You can also listen for the menu events using [`WinHotKeyEvent::receiver`] to get events for the hotkey pressed events.
-//! ```no_run
-//! use win_hotkey::WinHotKeyEvent;
-//!
-//! if let Ok(event) = WinHotKeyEvent::receiver().try_recv() {
-//!     println!("{:?}", event);
-//! }
-//! ```
-mod error;
-pub mod hotkey;
-mod manager;
+#[cfg(all(windows, feature = "thread_safe"))]
+pub use thread_safe::HotkeyManager;
 
-use crossbeam_channel::unbounded;
-use crossbeam_channel::Receiver;
-use crossbeam_channel::Sender;
-use once_cell::sync::Lazy;
-use once_cell::sync::OnceCell;
+#[cfg(all(windows, not(feature = "thread_safe")))]
+pub use single_thread::HotkeyManager;
 
-pub use self::error::*;
-pub use hotkey::HotKey;
-pub use manager::WinHotKeyManager;
+#[cfg(windows)]
+use windows_sys::Win32::Foundation::HWND;
+#[cfg(windows)]
+use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_NULL};
 
-/// Describes the state of the [`HotKey`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub enum HotKeyState {
-    /// The [`HotKey`] is pressed (the key is down).
-    Pressed,
-    /// The [`HotKey`] is released (the key is up).
-    Released,
+#[cfg(windows)]
+use crate::error::HotkeyError;
+#[cfg(windows)]
+use crate::keys::*;
+
+#[cfg(windows)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct HotkeyId(u16);
+
+/// HotkeyCallback contains the callback function and a list of extra_keys that need to be pressed
+/// together with the hotkey when executing the callback.
+///
+#[cfg(windows)]
+struct HotkeyCallback<T> {
+    /// Callback function to execute  when the hotkey & extrakeys match
+    callback: Box<dyn Fn() -> T + 'static>,
+    /// List of additional VKeys that are required to be pressed to execute
+    /// the callback
+    extra_keys: Vec<VirtualKey>,
 }
 
-/// Describes a global hotkey event emitted when a [`HotKey`] is pressed or released.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct WinHotKeyEvent {
-    /// Id of the associated [`HotKey`].
-    pub id: u32,
+#[cfg(windows)]
+pub trait HotkeyManagerImpl<T> {
+    fn new() -> Self;
 
-    /// State of the associated [`HotKey`].
-    pub state: HotKeyState,
+    /// Register a new hotkey with additional required extra keys.
+    ///
+    /// This will try to register the specified hotkey with windows, but not actively listen for it.
+    /// To listen for hotkeys in order to actually execute the callbacks, the `event_loop` function
+    /// must be called.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The main hotkey. For example `VKey::Return` for the CTRL + ALT + ENTER
+    /// combination.
+    ///
+    /// * `key_modifiers` - The modifier keys that need to be combined with the main key. The
+    /// modifier keys are the keys that need to be pressed in addition to the main hotkey in order
+    /// for the hotkey event to fire. For example `&[ModKey::Ctrl, ModKey::Alt]` for the
+    /// CTRL + ALT + ENTER combination.
+    ///
+    /// * `extra_keys` - A list of additional VKeys that also need to be pressed for the hotkey
+    /// callback to be executed. This is enforced after the windows hotkey event is fired, but
+    /// before executing the callback. So these keys need to be pressed before the main hotkey.
+    ///
+    /// * `callback` - A callback function or closure that will be executed when the hotkey is
+    /// triggered. The return type for all callbacks in the same HotkeyManager must be the same.
+    ///
+    /// # Windows API Functions used
+    /// - <https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey>
+    ///
+    fn register_extrakeys(
+        &mut self,
+        virtual_key: VirtualKey,
+        modifiers_key: Option<&[ModifiersKey]>,
+        extra_keys: &[VirtualKey],
+        callback: impl Fn() -> T + Send + 'static,
+    ) -> Result<HotkeyId, HotkeyError>;
+
+    /// Same as `register_extrakeys` but without extra keys.
+    ///
+    /// # Windows API Functions used
+    /// - <https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey>
+    ///
+    fn register(
+        &mut self,
+        virtual_key: VirtualKey,
+        modifiers_key: Option<&[ModifiersKey]>,
+        callback: impl Fn() -> T + Send + 'static,
+    ) -> Result<HotkeyId, HotkeyError>;
+
+    /// Unregister a hotkey. This will prevent the hotkey from being triggered in the future.
+    ///
+    /// # Windows API Functions used
+    /// - <https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-unregisterhotkey>
+    ///
+    fn unregister(&mut self, id: HotkeyId) -> Result<(), HotkeyError>;
+
+    /// Unregister all registered hotkeys. This will be called automatically when dropping the
+    /// HotkeyManager instance.
+    ///
+    /// # Windows API Functions used
+    /// - <https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-unregisterhotkey>
+    ///
+    fn unregister_all(&mut self) -> Result<(), HotkeyError>;
+
+    /// Wait for a single a hotkey event and execute the callback if all keys match. This returns
+    /// the callback result if it was not interrupted. The function call will block until a hotkey
+    /// is triggered or it is interrupted.
+    ///
+    /// If the event is interrupted, `None` is returned, otherwise `Some` is returned with the
+    /// return value of the executed callback function.
+    ///
+    /// ## Windows API Functions used
+    /// - <https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmessagew>
+    ///
+    fn handle_hotkey(&self) -> Option<T>;
+
+    /// Run the event loop, listening for hotkeys. This will run indefinitely until interrupted and
+    /// execute any hotkeys registered before.
+    ///
+    fn event_loop(&self);
+
+    /// Get an `InterruptHandle` for this `HotkeyManager` that can be used to interrupt the event
+    /// loop.
+    ///
+    fn interrupt_handle(&self) -> InterruptHandle;
 }
 
-/// A reciever that could be used to listen to global hotkey events.
-pub type WinHotKeyEventReceiver = Receiver<WinHotKeyEvent>;
-type WinHotKeyEventHandler = Box<dyn Fn(WinHotKeyEvent) + Send + Sync + 'static>;
+// The `InterruptHandle` can be used to interrupt the event loop of the originating `HotkeyManager`.
+/// This handle can be used from any thread and can be used multiple times.
+///
+/// # Note
+/// This handle will technically stay valid even after the `HotkeyManager` is dropped, but it will
+/// simply not do anything.
+///
+#[cfg(windows)]
+pub struct InterruptHandle(HWND);
 
-static WIN_HOTKEY_CHANNEL: Lazy<(Sender<WinHotKeyEvent>, WinHotKeyEventReceiver)> =
-    Lazy::new(unbounded);
+#[cfg(windows)]
+unsafe impl Sync for InterruptHandle {}
 
-static WIN_HOTKEY_EVENT_HANDLER: OnceCell<Option<WinHotKeyEventHandler>> = OnceCell::new();
+#[cfg(windows)]
+unsafe impl Send for InterruptHandle {}
 
-impl WinHotKeyEvent {
-    /// Returns the id of the associated [`HotKey`].
-    pub fn id(&self) -> u32 {
-        self.id
-    }
-
-    /// Returns the state of the associated [`HotKey`].
-
-    pub fn state(&self) -> HotKeyState {
-        self.state
-    }
-
-    /// Gets a reference to the event channel's [`WinHotKeyEventReceiver`]
-    /// which can be used to listen for global hotkey events.
+#[cfg(windows)]
+impl InterruptHandle {
+    /// Interrupt the evet loop of the associated `HotkeyManager`.
     ///
-    /// ## Note
-    ///
-    /// This will not receive any events if [`WinHotKeyEvent::set_event_handler`] has been called with a `Some` value.
-    pub fn receiver<'a>() -> &'a WinHotKeyEventReceiver {
-        &WIN_HOTKEY_CHANNEL.1
-    }
-
-    /// Set a handler to be called for new events. Useful for implementing custom event sender.
-    ///
-    /// ## Note
-    ///
-    /// Calling this function with a `Some` value,
-    /// will not send new events to the channel associated with [`WinHotKeyEvent::receiver`]
-    pub fn set_event_handler<F: Fn(WinHotKeyEvent) + Send + Sync + 'static>(f: Option<F>) {
-        if let Some(f) = f {
-            let _ = WIN_HOTKEY_EVENT_HANDLER.set(Some(Box::new(f)));
-        } else {
-            let _ = WIN_HOTKEY_EVENT_HANDLER.set(None);
+    pub fn interrupt(&self) {
+        unsafe {
+            PostMessageW(self.0, WM_NULL, 0, 0);
         }
     }
+}
 
-    pub(crate) fn send(event: WinHotKeyEvent) {
-        if let Some(handler) = WIN_HOTKEY_EVENT_HANDLER.get_or_init(|| None) {
-            handler(event);
-        } else {
-            let _ = WIN_HOTKEY_CHANNEL.0.send(event);
-        }
-    }
+/// Get the global keystate for a given Virtual Key.
+///
+/// Return true if the key is pressed, false otherwise.
+///
+/// ## Windows API Functions used
+/// - <https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getasynckeystate>
+///
+#[cfg(windows)]
+pub fn get_global_keystate(vk: VirtualKey) -> bool {
+    // Most significant bit represents key state (1 => pressed, 0 => not pressed)
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+    let key_state = unsafe { GetAsyncKeyState(vk.to_vk_code() as i32) };
+    // Get most significant bit only
+    let key_state = key_state as u32 >> 31;
+
+    key_state == 1
 }

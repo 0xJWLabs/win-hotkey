@@ -1,30 +1,17 @@
 use thiserror::Error;
 
-use crate::hotkey::HotKey;
+use crate::keys::VirtualKey;
 
-/// Errors returned by tray-icon.
-#[non_exhaustive]
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error(transparent)]
-    OsError(#[from] std::io::Error),
-    #[error("{0}")]
-    HotKeyParseError(String),
-    #[error("Couldn't recognize \"{0}\" as a valid HotKey Code, if you feel like it should be, please report this to https://github.com/tauri-apps/global-hotkey")]
-    UnrecognizedHotKeyCode(String),
-    #[error("Unexpected empty token while parsing hotkey: \"{0}\"")]
-    EmptyHotKeyToken(String),
-    #[error("Unexpected hotkey string format: \"{0}\", a hotkey should have the modifiers first and only contain one main key")]
-    UnexpectedHotKeyFormat(String),
-    #[error("{0}")]
-    FailedToRegister(String),
-    #[error("Failed to unregister hotkey: {0:?}")]
-    FailedToUnRegister(HotKey),
-    #[error("HotKey already registerd: {0:?}")]
-    AlreadyRegistered(HotKey),
-    #[error("Failed to watch media key event")]
-    FailedToWatchMediaKeyEvent,
+#[derive(Debug, Error)]
+pub enum HotkeyError {
+    #[error("invalid key name `{0}`")]
+    InvalidKey(String),
+    #[error("invalid key char `{0}`")]
+    InvalidKeyChar(char),
+    #[error("VKey is not a ModKey `{0}`")]
+    NotAModkey(VirtualKey),
+    #[error("Hotkey registration failed. Hotkey or Id might be in use already")]
+    RegistrationFailed,
+    #[error("Hotkey unregistration failed")]
+    UnregistrationFailed,
 }
-
-/// Convenient type alias of Result type for tray-icon.
-pub type Result<T> = std::result::Result<T, Error>;

@@ -1,35 +1,45 @@
-# win_hotkey
+# win-hotkey
 
-win_hotkey lets you register Global HotKeys for Desktop Applications on Windows.
+[![Crates.io](https://img.shields.io/crates/v/windows-hotkeys?style=flat-square)](https://crates.io/crates/windows-hotkeys)
+[![Crates.io](https://img.shields.io/crates/l/windows-hotkeys?style=flat-square)](https://crates.io/crates/windows-hotkeys)
+[![Docs.rs](https://img.shields.io/docsrs/windows-hotkeys?style=flat-square)](https://docs.rs/windows-hotkeys/latest/win-hotkey)
 
-## Example
+**`win-hotkey`** is a lightweight and opinionated Rust crate designed for handling system-wide hotkeys on Windows. It provides an easy-to-use abstraction over the Windows API, enabling thread-safe hotkey registration and callback execution.
 
-```rs
-use win_hotkey::{GlobalHotKeyManager, hotkey::{HotKey, Modifiers, Code}};
+---
 
-// initialize the hotkeys manager
-let manager = GlobalHotKeyManager::new().unwrap();
+## 🚀 Features
 
-// construct the hotkey
-let hotkey = HotKey::new(Some(Modifiers::SHIFT), Code::KeyD);
+- **Thread-Safe Hotkeys**: Handles Windows API's single-thread limitation seamlessly.
+- **High-Level Abstraction**: Simple interface to register and manage hotkeys.
+- **Customizable Callbacks**: Assign functions or closures to execute on hotkey triggers.
+- **Flexible Key Combination Support**: Register hotkeys with:
+  - Modifier + Key (e.g., `Alt + A`)
+  - Modifier + Key + Additional Keys
+- **Rust-Friendly**: Uses high-level abstractions for Virtual Keys (`VK_*`) and Modifier Keys (`MOD_*`).
+- **String-Based Keys**: Create virtual keys (`VirtualKey`) and modifiers keys (`ModifiersKey`) from human-readable strings.
 
-// register it
-manager.register(hotkey);
-```
+---
 
-## Processing global hotkey events
+## 📖 Usage
 
-You can also listen for the menu events using `GlobalHotKeyEvent::receiver` to get events for the hotkey pressed events.
+### Quick Start
 
-```rs
-use win_hotkey::GlobalHotKeyEvent;
+1. Create a `HotkeyManager` instance.
+2. Register a hotkey with a `VirtualKey`, one or more `ModifiersKey`s, and a callback.
+3. Run the event loop to listen for hotkey triggers.
 
-if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
-    println!("{:?}", event);
+```rust
+use win_hotkey::keys::{ModifiersKey, VirtualKey};
+use win_hotkey::{HotkeyManager, HotkeyManagerImpl};
+
+fn main() {
+    let mut hkm = HotkeyManager::new();
+
+    hkm.register(VirtualKey::A, &[ModifiersKey::Alt], || {
+        println!("Hotkey ALT + A was pressed");
+    })
+    .unwrap();
+
+    hkm.event_loop();
 }
-```
-
-## License
-
-Apache-2.0/MIT
-
