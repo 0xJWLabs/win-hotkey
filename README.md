@@ -1,8 +1,8 @@
 # win-hotkey
 
-[![Crates.io](https://img.shields.io/crates/v/windows-hotkeys?style=flat-square)](https://crates.io/crates/windows-hotkeys)
-[![Crates.io](https://img.shields.io/crates/l/windows-hotkeys?style=flat-square)](https://crates.io/crates/windows-hotkeys)
-[![Docs.rs](https://img.shields.io/docsrs/windows-hotkeys?style=flat-square)](https://docs.rs/windows-hotkeys/latest/win-hotkey)
+[![Crates.io](https://img.shields.io/crates/v/win-hotkey?style=flat-square)](https://crates.io/crates/win-hotkey)
+[![Crates.io](https://img.shields.io/crates/l/win-hotkey?style=flat-square)](https://crates.io/crates/win-hotkey)
+[![Docs.rs](https://img.shields.io/docsrs/win-hotkey?style=flat-square)](https://docs.rs/win-hotkey/latest/win-hotkey)
 
 **`win-hotkey`** is a lightweight and opinionated Rust crate designed for handling system-wide hotkeys on Windows. It provides an easy-to-use abstraction over the Windows API, enabling thread-safe hotkey registration and callback execution.
 
@@ -43,3 +43,31 @@ fn main() {
 
     hkm.event_loop();
 }
+```
+
+---
+
+## 🧵Threading Support
+
+### The Challenge
+Windows hotkey events must be registered and unregistered on the same thread. This limitation makes traditional multi-threaded hotkey management cumbersome.
+
+### The Solution
+
+`win-hotkey` provides two hotkey manager implementations:
+
+1. **Single-Thread** (`single_thread::HotkeyManager`)
+  - Must remain on the same thread where it was created.
+  - Works well for single-threaded applications.
+2. **Thread-Safe** (`thread_safe::HotkeyManager`) (*Default*)
+  - Launches a background thread to handle all hotkey-related operations.
+  - Uses a command-receiver model, ensuring all hotkey operations run on the same thread regardless of where the API is called.
+
+With the `thread_safe` feature enabled (default), the crate automatically provides the thread-safe implementation.
+
+---
+
+## 🔑 License
+
+This project is licensed under the [MIT License](https://crates.io/crates/win-hotkey)
+See the [`LICENSE`](./LICENSE) file for details
