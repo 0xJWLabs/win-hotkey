@@ -18,6 +18,14 @@ pub enum ModifiersKey {
     Non,
 }
 
+impl TryFrom<&str> for ModifiersKey {
+    type Error = HotkeyError;
+
+    fn try_from(val: &str) -> Result<Self, Self::Error> {
+        Self::from_keyname(val)
+    }
+}
+
 impl ModifiersKey {
     /// Take in a string and interpret it as one of the modifier keys.
     /// Possible values are:
@@ -33,7 +41,8 @@ impl ModifiersKey {
             "CTRL" | "CONTROL" => ModifiersKey::Ctrl,
             "SHIFT" => ModifiersKey::Shift,
             "WIN" | "WINDOWS" | "SUPER" => ModifiersKey::Win,
-            "NOREPEAT" | "NO_REPEAT" | "NON" => ModifiersKey::NoRepeat,
+            "NOREPEAT" | "NO_REPEAT" => ModifiersKey::NoRepeat,
+            "NON" => ModifiersKey::Non,
             val => return Err(HotkeyError::InvalidKey(val.to_string())),
         })
     }

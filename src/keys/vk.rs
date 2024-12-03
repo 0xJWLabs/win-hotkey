@@ -20,6 +20,8 @@ use std::{fmt::Display, hash::Hash};
 pub enum VirtualKey {
     /// Backspace key
     Back,
+    /// Backspace key
+    Backspace,
     /// Tab key
     Tab,
     /// CLEAR key
@@ -100,17 +102,17 @@ pub enum VirtualKey {
     /// Numeric keypad 9 key
     Numpad9,
     /// Multiply key
-    Multiply,
+    NumpadMultiply,
     /// Add key
-    Add,
+    NumpadAdd,
     /// Separator key
     Separator,
     /// Subtract key
-    Subtract,
+    NumpadSubtract,
     /// Decimal key
-    Decimal,
+    NumpadDecimal,
     /// Divide key
-    Divide,
+    NumpadDivide,
     /// F1 key
     F1,
     /// F2 key
@@ -213,33 +215,33 @@ pub enum VirtualKey {
     LaunchApp2,
     /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard,
     /// the `;:` key
-    Oem1,
+    Semicolon,
     /// For any country/region, the `+` key
-    OemPlus,
+    Plus,
     /// For any country/region, the `,` key
-    OemComma,
+    Comma,
     /// For any country/region, the `-` key
-    OemMinus,
+    Minus,
     /// For any country/region, the `.` key
-    OemPeriod,
+    Period,
     /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard,
     /// the `/?` key
-    Oem2,
+    Slash,
     /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard,
     /// the `~` key
-    Oem3,
+    Backquote,
     /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard,
     /// the `[{` key
-    Oem4,
+    BracketLeft,
     /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard,
     /// the `\|` key
-    Oem5,
+    Backslash,
     /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard,
     /// the `]}` key
-    Oem6,
+    BracketRight,
     /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard,
     /// the `"'` key
-    Oem7,
+    Quote,
     /// Used for miscellaneous characters; it can vary by keyboard.
     Oem8,
     /// The `<>` keys on the US standard keyboard, or the `\\|` key on the non-US 102-key keyboard
@@ -341,6 +343,23 @@ pub enum VirtualKey {
     CustomKeyCode(u16),
 }
 
+impl TryFrom<&str> for VirtualKey {
+    type Error = HotkeyError;
+    fn try_from(val: &str) -> Result<Self, Self::Error> {
+        Self::from_keyname(val)
+    }
+}
+
+impl TryFrom<char> for VirtualKey {
+    type Error = HotkeyError;
+    fn try_from(ch: char) -> Result<Self, Self::Error> {
+        match ch.to_ascii_uppercase() {
+            ch @ ('A'..='Z' | '0'..='9') => Ok(Self::CustomKeyCode(ch as u16)),
+            ch => Err(HotkeyError::InvalidKeyChar(ch)),
+        }
+    }
+}
+
 impl VirtualKey {
     /// Try to create a VirtualKey from a char. This only works for the simple number and letter keys
     /// ('A' to 'Z' and '0' to '9'). Letters can be upper or lower case
@@ -357,7 +376,7 @@ impl VirtualKey {
     pub const fn to_vk_code(&self) -> u16 {
         use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
         match self {
-            VirtualKey::Back => VK_BACK,
+            VirtualKey::Back | VirtualKey::Backspace => VK_BACK,
             VirtualKey::Tab => VK_TAB,
             VirtualKey::Clear => VK_CLEAR,
             VirtualKey::Return => VK_RETURN,
@@ -397,12 +416,12 @@ impl VirtualKey {
             VirtualKey::Numpad7 => VK_NUMPAD7,
             VirtualKey::Numpad8 => VK_NUMPAD8,
             VirtualKey::Numpad9 => VK_NUMPAD9,
-            VirtualKey::Multiply => VK_MULTIPLY,
-            VirtualKey::Add => VK_ADD,
+            VirtualKey::NumpadMultiply => VK_MULTIPLY,
+            VirtualKey::NumpadAdd => VK_ADD,
             VirtualKey::Separator => VK_SEPARATOR,
-            VirtualKey::Subtract => VK_SUBTRACT,
-            VirtualKey::Decimal => VK_DECIMAL,
-            VirtualKey::Divide => VK_DIVIDE,
+            VirtualKey::NumpadSubtract => VK_SUBTRACT,
+            VirtualKey::NumpadDecimal => VK_DECIMAL,
+            VirtualKey::NumpadDivide => VK_DIVIDE,
             VirtualKey::F1 => VK_F1,
             VirtualKey::F2 => VK_F2,
             VirtualKey::F3 => VK_F3,
@@ -453,17 +472,17 @@ impl VirtualKey {
             VirtualKey::LaunchMediaSelect => VK_LAUNCH_MEDIA_SELECT,
             VirtualKey::LaunchApp1 => VK_LAUNCH_APP1,
             VirtualKey::LaunchApp2 => VK_LAUNCH_APP2,
-            VirtualKey::Oem1 => VK_OEM_1,
-            VirtualKey::OemPlus => VK_OEM_PLUS,
-            VirtualKey::OemComma => VK_OEM_COMMA,
-            VirtualKey::OemMinus => VK_OEM_MINUS,
-            VirtualKey::OemPeriod => VK_OEM_PERIOD,
-            VirtualKey::Oem2 => VK_OEM_2,
-            VirtualKey::Oem3 => VK_OEM_3,
-            VirtualKey::Oem4 => VK_OEM_4,
-            VirtualKey::Oem5 => VK_OEM_5,
-            VirtualKey::Oem6 => VK_OEM_6,
-            VirtualKey::Oem7 => VK_OEM_7,
+            VirtualKey::Semicolon => VK_OEM_1,
+            VirtualKey::Plus => VK_OEM_PLUS,
+            VirtualKey::Comma => VK_OEM_COMMA,
+            VirtualKey::Minus => VK_OEM_MINUS,
+            VirtualKey::Period => VK_OEM_PERIOD,
+            VirtualKey::Slash => VK_OEM_2,
+            VirtualKey::Backquote => VK_OEM_3,
+            VirtualKey::BracketLeft => VK_OEM_4,
+            VirtualKey::Backslash => VK_OEM_5,
+            VirtualKey::BracketRight => VK_OEM_6,
+            VirtualKey::Quote => VK_OEM_7,
             VirtualKey::Oem8 => VK_OEM_8,
             VirtualKey::Oem102 => VK_OEM_102,
             VirtualKey::Attn => VK_ATTN,
@@ -548,17 +567,17 @@ impl VirtualKey {
         }
 
         // Try to match against hardcoded VK_* Key specifiers
-        Ok(match val.trim_start_matches("VK_") {
-            "BACK" => Self::Back,
+        Ok(match val.trim() {
+            "BACK" | "BACKSPACE" => Self::Back,
             "TAB" => Self::Tab,
             "CLEAR" => Self::Clear,
             "RETURN" => Self::Return,
             "SHIFT" => Self::Shift,
-            "CONTROL" => Self::Control,
-            "MENU" => Self::Menu,
+            "CONTROL" | "CTRL" => Self::Control,
+            "MENU" | "ALT" => Self::Menu,
             "PAUSE" => Self::Pause,
             "CAPITAL" => Self::Capital,
-            "ESCAPE" => Self::Escape,
+            "ESCAPE" | "ESC" => Self::Escape,
             "SPACE" => Self::Space,
             "PRIOR" => Self::Prior,
             "NEXT" => Self::Next,
@@ -579,22 +598,22 @@ impl VirtualKey {
             "RWIN" => Self::RWin,
             "APPS" => Self::Apps,
             "SLEEP" => Self::Sleep,
-            "NUMPAD0" => Self::Numpad0,
-            "NUMPAD1" => Self::Numpad1,
-            "NUMPAD2" => Self::Numpad2,
-            "NUMPAD3" => Self::Numpad3,
-            "NUMPAD4" => Self::Numpad4,
-            "NUMPAD5" => Self::Numpad5,
-            "NUMPAD6" => Self::Numpad6,
-            "NUMPAD7" => Self::Numpad7,
-            "NUMPAD8" => Self::Numpad8,
-            "NUMPAD9" => Self::Numpad9,
-            "MULTIPLY" => Self::Multiply,
-            "ADD" => Self::Add,
-            "SEPARATOR" => Self::Separator,
-            "SUBTRACT" => Self::Subtract,
-            "DECIMAL" => Self::Decimal,
-            "DIVIDE" => Self::Divide,
+            "NUMPAD0" | "NUM0" => Self::Numpad0,
+            "NUMPAD1" | "NUM1" => Self::Numpad1,
+            "NUMPAD2" | "NUM2" => Self::Numpad2,
+            "NUMPAD3" | "NUM3" => Self::Numpad3,
+            "NUMPAD4" | "NUM4" => Self::Numpad4,
+            "NUMPAD5" | "NUM5" => Self::Numpad5,
+            "NUMPAD6" | "NUM6" => Self::Numpad6,
+            "NUMPAD7" | "NUM7" => Self::Numpad7,
+            "NUMPAD8" | "NUM8" => Self::Numpad8,
+            "NUMPAD9" | "NUM9" => Self::Numpad9,
+            "NUMPADMULTIPLY" | "NUMMULTIPLY" => Self::NumpadMultiply,
+            "NUMPADADD" | "NUMADD" | "NUMPADPLUS" | "NUMPLUS" => Self::NumpadAdd,
+            "NUMPADSEPARATOR" | "NUMSEPARATOR" => Self::Separator,
+            "NUMPADSUBTRACT" | "NUMSUBTRACT" | "NUMPADMINUS" | "NUMMINUS" => Self::NumpadSubtract,
+            "NUMPADDECIMAL" | "NUMDECIMAL" => Self::NumpadDecimal,
+            "NUMPADDIVIDE" | "NUMDIVIDE" => Self::NumpadDivide,
             "F1" => Self::F1,
             "F2" => Self::F2,
             "F3" => Self::F3,
@@ -623,10 +642,10 @@ impl VirtualKey {
             "SCROLL" => Self::Scroll,
             "LSHIFT" => Self::LShift,
             "RSHIFT" => Self::RShift,
-            "LCONTROL" => Self::LControl,
-            "RCONTROL" => Self::RControl,
-            "LMENU" => Self::LMenu,
-            "RMENU" => Self::RMenu,
+            "LCONTROL" | "LCTRL" => Self::LControl,
+            "RCONTROL" | "RCTRL" => Self::RControl,
+            "LMENU" | "LALT" => Self::LMenu,
+            "RMENU" | "RALT" => Self::RMenu,
             "BROWSER_BACK" => Self::BrowserBack,
             "BROWSER_FORWARD" => Self::BrowserForward,
             "BROWSER_REFRESH" => Self::BrowserRefresh,
@@ -645,17 +664,17 @@ impl VirtualKey {
             "LAUNCH_MEDIA_SELECT" => Self::LaunchMediaSelect,
             "LAUNCH_APP1" => Self::LaunchApp1,
             "LAUNCH_APP2" => Self::LaunchApp2,
-            "OEM_1" => Self::Oem1,
-            "OEM_PLUS" => Self::OemPlus,
-            "OEM_COMMA" => Self::OemComma,
-            "OEM_MINUS" => Self::OemMinus,
-            "OEM_PERIOD" => Self::OemPeriod,
-            "OEM_2" => Self::Oem2,
-            "OEM_3" => Self::Oem3,
-            "OEM_4" => Self::Oem4,
-            "OEM_5" => Self::Oem5,
-            "OEM_6" => Self::Oem6,
-            "OEM_7" => Self::Oem7,
+            "SEMICOLON" | "OEM_1" | ";" | ":" => Self::Semicolon,
+            "ADD" | "PLUS" | "+" => Self::Plus,
+            "COMMA" | "," => Self::Comma,
+            "SUBTRACT" | "MINUS" | "-" => Self::Minus,
+            "PERIOD" | "." => Self::Period,
+            "SLASH" | "OEM_2" | "/" => Self::Slash,
+            "BACKQUOTE" | "OEM_3" | "`" => Self::Backquote,
+            "BRACKETLEFT" | "OEM_4" | "[" | "{" => Self::BracketLeft,
+            "BACKSLASH" | "OEM_5" | "\\" => Self::Backslash,
+            "BRACKETRIGHT" | "OEM_6" | "]" | "}" => Self::BracketRight,
+            "QUOTE" | "OEM_7" | "'" | r#"""# => Self::Quote,
             "OEM_8" => Self::Oem8,
             "OEM_102" => Self::Oem102,
             "ATTN" => Self::Attn,
