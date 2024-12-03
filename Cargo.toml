@@ -1,6 +1,6 @@
 [package]
 name = "win-hotkey"
-version = "0.1.4"
+version = "0.1.5"
 description = "A lightweight, thread-safe Rust library for managing system-wide hotkeys on Windows, with high-level abstractions and customizable callbacks."
 edition = "2021"
 license = "Apache-2.0"
@@ -26,6 +26,7 @@ features = [
   "Win32_UI_WindowsAndMessaging",
   "Win32_Foundation",
   "Win32_System_LibraryLoader",
+  "Win32_System_Threading",
   "Win32_UI_Input_KeyboardAndMouse",
 ]
 

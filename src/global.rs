@@ -104,44 +104,45 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
 
         listening.store(true, Ordering::SeqCst);
 
-        // Lock bindings to access keybindings
-        let mut hotkey_manager = hotkey_manager.lock().unwrap();
-        let hotkeys = hotkeys.lock().unwrap();
+        std::thread::spawn(move || {
+            // Lock bindings to access keybindings
+            let mut hotkey_manager = hotkey_manager.lock().unwrap();
+            let hotkeys = hotkeys.lock().unwrap();
 
-        // Collect hotkeys and their actions upfront
-        for hotkey in hotkeys.values() {
-            let action = hotkey.action.clone();
-            let result = if let Some(action) = action {
-                // Register with an action if present
-                hotkey_manager.register_extrakeys(
-                    hotkey.key,
-                    hotkey.modifiers.as_deref(),
-                    hotkey.extras.as_deref(),
-                    Some(move || {
-                        let action = action.clone();
-                        let action = action.lock().unwrap();
-                        action()
-                    }),
-                )
-            } else {
-                // Register without an action if None
-                hotkey_manager.register_extrakeys(
-                    hotkey.key,
-                    hotkey.modifiers.as_deref(),
-                    hotkey.extras.as_deref(),
-                    None::<fn() -> T>,
-                )
-            };
+            // Collect hotkeys and their actions upfront
+            for hotkey in hotkeys.values() {
+                let action = hotkey.action.clone();
+                let result = if let Some(action) = action {
+                    // Register with an action if present
+                    hotkey_manager.register_extrakeys(
+                        hotkey.key,
+                        hotkey.modifiers.as_deref(),
+                        hotkey.extras.as_deref(),
+                        Some(move || {
+                            let action = action.clone();
+                            let action = action.lock().unwrap();
+                            action()
+                        }),
+                    )
+                } else {
+                    // Register without an action if None
+                    hotkey_manager.register_extrakeys(
+                        hotkey.key,
+                        hotkey.modifiers.as_deref(),
+                        hotkey.extras.as_deref(),
+                        None::<fn() -> T>,
+                    )
+                };
 
-            if let Err(e) = result {
-                eprintln!("Failed to register keybinding {:?}: {:?}", hotkey.key, e);
+                if let Err(e) = result {
+                    eprintln!("Failed to register keybinding {:?}: {:?}", hotkey.key, e);
+                }
             }
-        }
 
-        // Event loop, will run until listening is set to false
-        while listening.load(Ordering::SeqCst) {
-            hotkey_manager.event_loop();
-        }
+            while listening.load(Ordering::SeqCst) {
+                hotkey_manager.event_loop();
+            }
+        });
     }
 
     fn stop(&self) {
