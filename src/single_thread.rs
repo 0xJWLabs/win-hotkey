@@ -81,8 +81,8 @@ impl<T> HotkeyManagerImpl<T> for HotkeyManager<T> {
         &mut self,
         virtual_key: VirtualKey,
         modifiers_key: Option<&[ModifiersKey]>,
-        extra_keys: &[VirtualKey],
-        callback: impl Fn() -> T + Send + 'static,
+        extra_keys: Option<&[VirtualKey]>,
+        callback: Option<impl Fn() -> T + Send + 'static>,
     ) -> Result<HotkeyId, HotkeyError> {
         let register_id = HotkeyId(self.id);
         self.id += 1;
@@ -105,11 +105,12 @@ impl<T> HotkeyManagerImpl<T> for HotkeyManager<T> {
             Err(HotkeyError::RegistrationFailed)
         } else {
             // Add the HotkeyCallback to the handlers when the hotkey was registered
+            let callback = callback.map(|cb| Box::new(cb) as Box<dyn Fn() -> T + 'static>);
             self.handlers.insert(
                 register_id,
                 HotkeyCallback {
-                    callback: Box::new(callback),
-                    extra_keys: extra_keys.to_owned(),
+                    callback,
+                    extra_keys: extra_keys.map(|keys| keys.to_vec()),
                 },
             );
 
@@ -121,9 +122,9 @@ impl<T> HotkeyManagerImpl<T> for HotkeyManager<T> {
         &mut self,
         virtual_key: VirtualKey,
         modifiers_key: Option<&[ModifiersKey]>,
-        callback: impl Fn() -> T + Send + 'static,
+        callback: Option<impl Fn() -> T + Send + 'static>,
     ) -> Result<HotkeyId, HotkeyError> {
-        self.register_extrakeys(virtual_key, modifiers_key, &[], callback)
+        self.register_extrakeys(virtual_key, modifiers_key, None, callback)
     }
 
     fn unregister(&mut self, id: HotkeyId) -> Result<(), HotkeyError> {
@@ -163,13 +164,19 @@ impl<T> HotkeyManagerImpl<T> for HotkeyManager<T> {
 
                     // Get the callback for the received ID
                     if let Some(handler) = self.handlers.get(&hk_id) {
-                        // Check if all extra keys are pressed
-                        if !handler
-                            .extra_keys
-                            .iter()
-                            .any(|vk| !get_global_keystate(*vk))
-                        {
-                            return Some((handler.callback)());
+                        match &handler.extra_keys {
+                            Some(keys) => {
+                                if !keys.iter().any(|vk| !get_global_keystate(*vk)) {
+                                    if let Some(cb) = &handler.callback {
+                                        return Some(cb());
+                                    }
+                                }
+                            }
+                            None => {
+                                if let Some(cb) = &handler.callback {
+                                    return Some(cb());
+                                }
+                            }
                         }
                     }
                 } else if WM_NULL == msg.message {

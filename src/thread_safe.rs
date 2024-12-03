@@ -13,11 +13,11 @@ use crate::HotkeyId;
 use crate::HotkeyManagerImpl;
 use crate::InterruptHandle;
 
-struct Hotkey<T: 'static> {
+pub struct Hotkey<T: 'static> {
     virtual_key: VirtualKey,
     modifiers_key: Option<Vec<ModifiersKey>>,
-    extra_keys: Vec<VirtualKey>,
-    callback: Box<dyn Fn() -> T + Send + 'static>,
+    extra_keys: Option<Vec<VirtualKey>>,
+    callback: Option<Box<dyn Fn() -> T + Send + 'static>>,
 }
 
 enum HotkeyMessage<T: 'static> {
@@ -74,7 +74,7 @@ impl<T> TSHotkeyManagerBackend<T> {
                     let return_value = self.hkm.register_extrakeys(
                         hotkey.virtual_key,
                         hotkey.modifiers_key.as_deref(),
-                        &hotkey.extra_keys,
+                        hotkey.extra_keys.as_deref(),
                         hotkey.callback,
                     );
                     channel.send(return_value).unwrap();
@@ -127,8 +127,8 @@ impl<T: 'static + Send> HotkeyManagerImpl<T> for HotkeyManager<T> {
         &mut self,
         virtual_key: VirtualKey,
         modifiers_key: Option<&[ModifiersKey]>,
-        extra_keys: &[VirtualKey],
-        callback: impl Fn() -> T + Send + 'static,
+        extra_keys: Option<&[VirtualKey]>,
+        callback: Option<impl Fn() -> T + Send + 'static>,
     ) -> Result<HotkeyId, HotkeyError> {
         let return_channel = channel();
 
@@ -140,11 +140,13 @@ impl<T: 'static + Send> HotkeyManagerImpl<T> for HotkeyManager<T> {
                 .push(ModifiersKey::NoRepeat);
         }
 
+        let callback_boxed = callback.map(|cb| Box::new(cb) as Box<dyn Fn() -> T + Send>);
+
         let hotkey = Hotkey {
             virtual_key,
             modifiers_key,
-            extra_keys: extra_keys.to_vec(),
-            callback: Box::new(callback),
+            extra_keys: extra_keys.map(|keys| keys.to_vec()),
+            callback: callback_boxed,
         };
         self.sender
             .send(HotkeyMessage::Register(return_channel.0, hotkey))
@@ -156,9 +158,9 @@ impl<T: 'static + Send> HotkeyManagerImpl<T> for HotkeyManager<T> {
         &mut self,
         virtual_key: VirtualKey,
         modifiers_key: Option<&[ModifiersKey]>,
-        callback: impl Fn() -> T + Send + 'static,
+        callback: Option<impl Fn() -> T + Send + 'static>,
     ) -> Result<HotkeyId, HotkeyError> {
-        self.register_extrakeys(virtual_key, modifiers_key, &[], callback)
+        self.register_extrakeys(virtual_key, modifiers_key, None, callback)
     }
 
     fn unregister(&mut self, id: HotkeyId) -> Result<(), HotkeyError> {

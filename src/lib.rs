@@ -1,6 +1,8 @@
 #![allow(clippy::doc_lazy_continuation)]
 #[cfg(windows)]
 pub mod error;
+#[cfg(all(windows, feature = "thread_safe"))]
+pub mod global;
 #[cfg(windows)]
 pub mod keys;
 #[cfg(windows)]
@@ -34,10 +36,10 @@ pub struct HotkeyId(u16);
 #[cfg(windows)]
 struct HotkeyCallback<T> {
     /// Callback function to execute  when the hotkey & extrakeys match
-    callback: Box<dyn Fn() -> T + 'static>,
+    callback: Option<Box<dyn Fn() -> T + 'static>>,
     /// List of additional VKeys that are required to be pressed to execute
     /// the callback
-    extra_keys: Vec<VirtualKey>,
+    extra_keys: Option<Vec<VirtualKey>>,
 }
 
 #[cfg(windows)]
@@ -74,8 +76,8 @@ pub trait HotkeyManagerImpl<T> {
         &mut self,
         virtual_key: VirtualKey,
         modifiers_key: Option<&[ModifiersKey]>,
-        extra_keys: &[VirtualKey],
-        callback: impl Fn() -> T + Send + 'static,
+        extra_keys: Option<&[VirtualKey]>,
+        callback: Option<impl Fn() -> T + Send + 'static>,
     ) -> Result<HotkeyId, HotkeyError>;
 
     /// Same as `register_extrakeys` but without extra keys.
@@ -87,7 +89,7 @@ pub trait HotkeyManagerImpl<T> {
         &mut self,
         virtual_key: VirtualKey,
         modifiers_key: Option<&[ModifiersKey]>,
-        callback: impl Fn() -> T + Send + 'static,
+        callback: Option<impl Fn() -> T + Send + 'static>,
     ) -> Result<HotkeyId, HotkeyError>;
 
     /// Unregister a hotkey. This will prevent the hotkey from being triggered in the future.
