@@ -4,6 +4,7 @@ compile_error!("Only supported on windows");
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
+use windows_sys::core::PCSTR;
 use windows_sys::Win32::Foundation::HWND;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleA;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::RegisterHotKey;
@@ -207,12 +208,15 @@ fn create_hidden_window() -> Result<DropHWND, ()> {
     let hwnd = unsafe {
         // Get the current module handle
         let hinstance = GetModuleHandleA(std::ptr::null_mut());
+        let lpwindowname = c"".as_ptr() as PCSTR;
+        let lpclassname = c"Static".as_ptr() as PCSTR;
+
         CreateWindowExA(
             WS_EX_NOACTIVATE,
             // The "Static" class is not intended for windows, but this shouldn't matter since the
             // window is hidden anyways
-            b"Static\0".as_ptr(),
-            b"\0".as_ptr(),
+            lpclassname,
+            lpwindowname,
             WS_DISABLED,
             0,
             0,

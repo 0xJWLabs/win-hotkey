@@ -1,11 +1,10 @@
+use rustc_hash::FxHashMap;
+
+use crate::{HotkeyManager, HotkeyManagerImpl, ModifiersKey, VirtualKey};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
-
-use rustc_hash::FxHashMap;
-
-use crate::{HotkeyManager, HotkeyManagerImpl, ModifiersKey, VirtualKey};
 
 #[derive(Clone)]
 pub struct GlobalHotkey<T> {
@@ -52,7 +51,7 @@ pub trait GlobalHotkeyManagerImpl<T> {
     fn add_hotkey(&self, name: String, hotkey: GlobalHotkey<T>);
     fn remove_hotkey(&self, name: String) -> Option<GlobalHotkey<T>>;
     fn start(&self);
-    fn stop(&self);
+    fn stop(&self) -> bool;
 }
 
 impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
@@ -145,26 +144,53 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
         });
     }
 
-    fn stop(&self) {
+    fn stop(&self) -> bool {
         if !self.listening.load(Ordering::SeqCst) {
-            eprintln!("Not currently listening for hotkeys.");
-            return;
+            return false;
         }
 
         // Set listening flag to false to stop the loop
         self.listening.store(false, Ordering::SeqCst);
-        eprintln!("Stopped listening for hotkeys.");
+        true
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum HotKeyParseError {
-    #[error("Couldn't recognize \"{0}\" as a valid key for hotkey")]
     UnsupportedKey(String),
-    #[error("Found empty token while parsing hotkey: {0}")]
     EmptyToken(String),
-    #[error("Invalid hotkey format: \"{0}\", an hotkey should have the modifiers first and only one main key, for example: \"Shift + Alt + K\"")]
     InvalidFormat(String),
+}
+
+impl std::fmt::Display for HotKeyParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            HotKeyParseError::UnsupportedKey(ref key) => {
+                write!(
+                    f,
+                    "Couldn't recognize \"{}\" as a valid key for hotkey",
+                    key
+                )
+            }
+            HotKeyParseError::EmptyToken(ref token) => {
+                write!(f, "Found empty token while parsing hotkey: {}", token)
+            }
+            HotKeyParseError::InvalidFormat(ref format) => {
+                write!(
+                    f,
+                    "Invalid hotkey format: \"{}\", a hotkey should have the modifiers first and only one main key, for example: \"Shift + Alt + K\"",
+                    format
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for HotKeyParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        // No underlying error, so we return None.
+        None
+    }
 }
 
 impl<T: Send + 'static> TryInto<GlobalHotkey<T>> for &str {
