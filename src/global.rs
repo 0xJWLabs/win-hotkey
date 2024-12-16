@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap;
 
 use crate::{HotkeyManager, HotkeyManagerImpl, ModifiersKey, VirtualKey};
+use core::fmt;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -14,6 +15,27 @@ pub struct GlobalHotkey<T> {
     action: Option<Arc<Mutex<dyn Fn() -> T + Send + 'static>>>, // Callback needs to be Send too
 }
 
+impl<T> fmt::Debug for GlobalHotkey<T>
+where
+    T: fmt::Debug, // Ensures that T can be printed if necessary
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GlobalHotkey")
+            .field("key", &self.key)
+            .field("modifiers", &self.modifiers)
+            .field("extras", &self.extras)
+            .field(
+                "action",
+                &self.action.as_ref().map_or_else(
+                    || "None".to_string(),
+                    |_| "Some(Fn() -> T + Send)".to_string(),
+                ),
+            )
+            .finish()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct GlobalHotkeyManager<T: Send + 'static> {
     hotkeys: Arc<Mutex<FxHashMap<String, GlobalHotkey<T>>>>,
     manager: Arc<Mutex<HotkeyManager<T>>>,
@@ -98,48 +120,52 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
         }
 
         let hotkeys = self.hotkeys.clone();
-        let hotkey_manager = self.manager.clone();
+        let hotkey_manager = self.manager.clone(); // This is an Arc<Mutex<HotkeyManager<T>>>
         let listening = self.listening.clone();
 
         listening.store(true, Ordering::SeqCst);
 
-        std::thread::spawn(move || {
-            // Lock bindings to access keybindings
-            let mut hotkey_manager = hotkey_manager.lock().unwrap();
-            let hotkeys = hotkeys.lock().unwrap();
+        // Lock bindings to access keybindings
+        let mut hotkey_manager_mut = hotkey_manager.lock().unwrap();
+        let hotkeys = hotkeys.lock().unwrap();
 
-            // Collect hotkeys and their actions upfront
-            for hotkey in hotkeys.values() {
-                let action = hotkey.action.clone();
-                let result = if let Some(action) = action {
-                    // Register with an action if present
-                    hotkey_manager.register_extrakeys(
-                        hotkey.key,
-                        hotkey.modifiers.as_deref(),
-                        hotkey.extras.as_deref(),
-                        Some(move || {
-                            let action = action.clone();
-                            let action = action.lock().unwrap();
-                            action()
-                        }),
-                    )
-                } else {
-                    // Register without an action if None
-                    hotkey_manager.register_extrakeys(
-                        hotkey.key,
-                        hotkey.modifiers.as_deref(),
-                        hotkey.extras.as_deref(),
-                        None::<fn() -> T>,
-                    )
-                };
+        // Collect hotkeys and their actions upfront
+        for hotkey in hotkeys.values() {
+            let action = hotkey.action.clone();
+            let result = if let Some(action) = action {
+                // Register with an action if present
+                hotkey_manager_mut.register_extrakeys(
+                    hotkey.key,
+                    hotkey.modifiers.as_deref(),
+                    hotkey.extras.as_deref(),
+                    Some(move || {
+                        let action = action.clone();
+                        let action = action.lock().unwrap();
+                        action()
+                    }),
+                )
+            } else {
+                // Register without an action if None
+                hotkey_manager_mut.register_extrakeys(
+                    hotkey.key,
+                    hotkey.modifiers.as_deref(),
+                    hotkey.extras.as_deref(),
+                    None::<fn() -> T>,
+                )
+            };
 
-                if let Err(e) = result {
-                    eprintln!("Failed to register keybinding {:?}: {:?}", hotkey.key, e);
-                }
+            if let Err(e) = result {
+                eprintln!("Failed to register keybinding {:?}: {:?}", hotkey.key, e);
             }
+        }
 
+        let hkm = hotkey_manager.clone();
+
+        // Spawn the thread and move the Arc<Mutex<HotkeyManager<T>>> into the thread
+        std::thread::spawn(move || {
+            // Lock the Mutex inside the thread, instead of moving the MutexGuard
             while listening.load(Ordering::SeqCst) {
-                hotkey_manager.event_loop();
+                hkm.lock().unwrap().event_loop();
             }
         });
     }

@@ -10,6 +10,8 @@ pub mod single_thread;
 #[cfg(all(windows, feature = "thread_safe"))]
 pub mod thread_safe;
 
+use core::fmt;
+
 #[cfg(all(windows, feature = "thread_safe"))]
 pub use thread_safe::HotkeyManager;
 
@@ -40,6 +42,25 @@ struct HotkeyCallback<T> {
     /// List of additional VKeys that are required to be pressed to execute
     /// the callback
     extra_keys: Option<Vec<VirtualKey>>,
+}
+
+#[cfg(windows)]
+impl<T> fmt::Debug for HotkeyCallback<T>
+where
+    T: fmt::Debug, // Ensure that T can be printed if necessary
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HotkeyCallback")
+            .field(
+                "callback",
+                &self.callback.as_ref().map_or_else(
+                    || "None".to_string(),
+                    |_| "Some(Fn() -> T + 'static)".to_string(),
+                ),
+            )
+            .field("extra_keys", &self.extra_keys)
+            .finish()
+    }
 }
 
 #[cfg(windows)]

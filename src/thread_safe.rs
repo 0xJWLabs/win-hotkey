@@ -1,3 +1,4 @@
+use core::fmt;
 use std::marker::PhantomData;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
@@ -20,6 +21,27 @@ pub struct Hotkey<T: 'static> {
     callback: Option<Box<dyn Fn() -> T + Send + 'static>>,
 }
 
+impl<T> fmt::Debug for Hotkey<T>
+where
+    T: fmt::Debug, // Ensures that T can be printed if necessary
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Hotkey")
+            .field("virtual_key", &self.virtual_key)
+            .field("modifiers_key", &self.modifiers_key)
+            .field("extra_keys", &self.extra_keys)
+            .field(
+                "callback",
+                &self.callback.as_ref().map_or_else(
+                    || "None".to_string(),
+                    |_| "Some(Fn() -> T + Send)".to_string(),
+                ),
+            ) // Handling Option more explicitly
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 enum HotkeyMessage<T: 'static> {
     Register(Sender<Result<HotkeyId, HotkeyError>>, Hotkey<T>),
     HandleHotkey(Sender<Option<T>>),
@@ -30,6 +52,7 @@ enum HotkeyMessage<T: 'static> {
     Exit(Sender<()>),
 }
 
+#[derive(Debug)]
 pub struct HotkeyManager<T: 'static> {
     no_repeat: bool,
     _phantom: PhantomData<T>,

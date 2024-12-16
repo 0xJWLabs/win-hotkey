@@ -27,6 +27,7 @@ use crate::HotkeyId;
 use crate::HotkeyManagerImpl;
 use crate::InterruptHandle;
 
+#[derive(Debug, Clone)]
 struct DropHWND(HWND);
 
 impl Drop for DropHWND {
@@ -37,6 +38,7 @@ impl Drop for DropHWND {
     }
 }
 
+#[derive(Debug)]
 pub struct HotkeyManager<T> {
     hwnd: DropHWND,
     id: u16,
