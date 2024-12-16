@@ -30,6 +30,9 @@ use crate::InterruptHandle;
 #[derive(Debug, Clone)]
 struct DropHWND(HWND);
 
+unsafe impl Send for DropHWND {}
+unsafe impl Sync for DropHWND {}
+
 impl Drop for DropHWND {
     fn drop(&mut self) {
         if !self.0.is_null() {
@@ -46,6 +49,9 @@ pub struct HotkeyManager<T> {
     no_repeat: bool,
     _unimpl_send_sync: PhantomData<*const u8>,
 }
+
+unsafe impl<T> Send for HotkeyManager<T> {}
+unsafe impl<T> Sync for HotkeyManager<T> {}
 
 impl<T> Default for HotkeyManager<T> {
     fn default() -> Self {
