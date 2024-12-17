@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 
-use crate::{HotkeyManager, HotkeyManagerImpl, ModifiersKey, VirtualKey};
+use crate::{HotkeyId, HotkeyManager, HotkeyManagerImpl, ModifiersKey, VirtualKey};
 use core::fmt;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -40,6 +40,7 @@ pub struct GlobalHotkeyManager<T: Send + 'static> {
     hotkeys: Arc<Mutex<FxHashMap<String, GlobalHotkey<T>>>>,
     manager: Arc<Mutex<HotkeyManager<T>>>,
     listening: Arc<AtomicBool>,
+    key_ids: Arc<Mutex<Vec<HotkeyId>>>,
 }
 
 impl<T: Send + 'static> GlobalHotkey<T> {
@@ -56,6 +57,7 @@ impl<T: Send + 'static> Default for GlobalHotkeyManager<T> {
             manager: Arc::new(Mutex::new(hkm)),
             listening: Arc::new(AtomicBool::new(false)),
             hotkeys: Arc::new(Mutex::new(FxHashMap::default())),
+            key_ids: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -73,6 +75,7 @@ pub trait GlobalHotkeyManagerImpl<T> {
     fn add_hotkey(&self, name: String, hotkey: GlobalHotkey<T>);
     fn remove_hotkey(&self, name: String) -> Option<GlobalHotkey<T>>;
     fn start(&self);
+    fn reload(&self);
     fn stop(&self) -> bool;
 }
 
@@ -113,21 +116,20 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
         hotkeys.remove(&key)
     }
 
-    fn start(&self) {
-        if self.listening.load(Ordering::SeqCst) {
-            eprintln!("Already listening for hotkeys.");
-            return;
-        }
+    fn reload(&self) {
+        let mut key_ids = self.key_ids.lock().unwrap();
+        let hotkey_manager = self.manager.clone();
+        let mut hotkey_manager_mut = hotkey_manager.lock().unwrap();
 
         let hotkeys = self.hotkeys.clone();
-        let hotkey_manager = self.manager.clone(); // This is an Arc<Mutex<HotkeyManager<T>>>
-        let listening = self.listening.clone();
-
-        listening.store(true, Ordering::SeqCst);
+        let hotkeys = hotkeys.lock().unwrap();
 
         // Lock bindings to access keybindings
-        let mut hotkey_manager_mut = hotkey_manager.lock().unwrap();
-        let hotkeys = hotkeys.lock().unwrap();
+        for key_id in key_ids.drain(..) {
+            if let Err(e) = hotkey_manager_mut.unregister(key_id) {
+                eprintln!("failed to unregister keybinding {:?}: {:?}", key_id, e);
+            }
+        }
 
         // Collect hotkeys and their actions upfront
         for hotkey in hotkeys.values() {
@@ -155,7 +157,59 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
             };
 
             if let Err(e) = result {
-                eprintln!("Failed to register keybinding {:?}: {:?}", hotkey.key, e);
+                eprintln!("failed to register keybinding {:?}: {:?}", hotkey.key, e);
+            }
+        }
+    }
+
+    fn start(&self) {
+        if self.listening.load(Ordering::SeqCst) {
+            eprintln!("Already listening for hotkeys.");
+            return;
+        }
+
+        let hotkeys = self.hotkeys.clone();
+        let hotkey_manager = self.manager.clone(); // This is an Arc<Mutex<HotkeyManager<T>>>
+        let listening = self.listening.clone();
+        let key_ids = self.key_ids.clone();
+
+        listening.store(true, Ordering::SeqCst);
+
+        // Lock bindings to access keybindings
+        let mut hotkey_manager_mut = hotkey_manager.lock().unwrap();
+        let hotkeys = hotkeys.lock().unwrap();
+        let mut key_ids_mut = key_ids.lock().unwrap();
+
+        // Collect hotkeys and their actions upfront
+        for hotkey in hotkeys.values() {
+            let action = hotkey.action.clone();
+            let result = if let Some(action) = action {
+                // Register with an action if present
+                hotkey_manager_mut.register_extrakeys(
+                    hotkey.key,
+                    hotkey.modifiers.as_deref(),
+                    hotkey.extras.as_deref(),
+                    Some(move || {
+                        let action = action.clone();
+                        let action = action.lock().unwrap();
+                        action()
+                    }),
+                )
+            } else {
+                // Register without an action if None
+                hotkey_manager_mut.register_extrakeys(
+                    hotkey.key,
+                    hotkey.modifiers.as_deref(),
+                    hotkey.extras.as_deref(),
+                    None::<fn() -> T>,
+                )
+            };
+
+            match result {
+                Ok(hotkey_id) => key_ids_mut.push(hotkey_id),
+                Err(e) => {
+                    eprintln!("failed to register keybinding {:?}: {:?}", hotkey.key, e);
+                }
             }
         }
 
