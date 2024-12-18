@@ -1,6 +1,6 @@
 [package]
 name = "win-hotkey"
-version = "0.2.7"
+version = "0.2.8"
 description = "A lightweight, thread-safe Rust library for managing system-wide hotkeys on Windows, with high-level abstractions and customizable callbacks."
 edition = "2021"
 license = "Apache-2.0"
