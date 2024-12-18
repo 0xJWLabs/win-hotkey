@@ -237,9 +237,10 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
 
         std::thread::spawn(move || {
             // Lock the Mutex inside the thread, instead of moving the MutexGuard
-            while listening.load(Ordering::SeqCst) {
-                hkm.lock().unwrap().event_loop();
-            }
+            // while listening.load(Ordering::SeqCst) {
+            //     hkm.lock().unwrap().event_loop();
+            // }
+            hkm.lock().unwrap().event_loop();
         });
     }
 
@@ -249,6 +250,9 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
         }
 
         self.listening.store(false, Ordering::SeqCst);
+        let hkm = self.manager.lock().unwrap();
+        let hk = hkm.interrupt_handle();
+        hk.interrupt();
 
         true
     }
