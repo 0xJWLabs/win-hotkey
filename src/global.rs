@@ -183,11 +183,10 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
         self.listening.store(false, Ordering::SeqCst);
 
         // Clone necessary Arc references for the thread
-        let manager = self.manager.clone();
         let key_ids = self.key_ids.clone();
 
-        // Spawn a thread for cleanup
-        std::thread::spawn(move || {
+        {
+            let manager = self.manager.clone();
             // Unregister all hotkeys
             if let Ok(mut hotkey_manager) = manager.lock() {
                 if let Err(e) = hotkey_manager.unregister_all() {
@@ -203,7 +202,7 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
             } else {
                 eprintln!("failed to acquire lock on key IDs for cleanup.");
             }
-        });
+        }
 
         true
     }
