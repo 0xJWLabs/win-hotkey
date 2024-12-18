@@ -75,7 +75,6 @@ pub trait GlobalHotkeyManagerImpl<T> {
     fn add_hotkey(&self, name: String, hotkey: GlobalHotkey<T>);
     fn remove_hotkey(&self, name: String) -> Option<GlobalHotkey<T>>;
     fn start(&self);
-    fn reload(&self);
     fn stop(&self) -> bool;
 }
 
@@ -114,52 +113,6 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
     fn remove_hotkey(&self, key: String) -> Option<GlobalHotkey<T>> {
         let mut hotkeys = self.hotkeys.lock().unwrap();
         hotkeys.remove(&key)
-    }
-
-    fn reload(&self) {
-        let hotkey_manager = self.manager.clone();
-        let mut hotkey_manager_mut = hotkey_manager.lock().unwrap();
-
-        if let Err(e) = hotkey_manager_mut.unregister_all() {
-            eprintln!("failed to unregister all keybindings: {}", e);
-        }
-
-        let hotkeys = self.hotkeys.lock().unwrap();
-        let mut key_ids = self.key_ids.lock().unwrap();
-        key_ids.clear();
-
-        // Collect hotkeys and their actions upfront
-        for hotkey in hotkeys.values() {
-            let action = hotkey.action.clone();
-            let result = if let Some(action) = action {
-                // Register with an action if present
-                hotkey_manager_mut.register_extrakeys(
-                    hotkey.key,
-                    hotkey.modifiers.as_deref(),
-                    hotkey.extras.as_deref(),
-                    Some(move || {
-                        let action = action.clone();
-                        let action = action.lock().unwrap();
-                        action()
-                    }),
-                )
-            } else {
-                // Register without an action if None
-                hotkey_manager_mut.register_extrakeys(
-                    hotkey.key,
-                    hotkey.modifiers.as_deref(),
-                    hotkey.extras.as_deref(),
-                    None::<fn() -> T>,
-                )
-            };
-
-            match result {
-                Ok(hotkey_id) => key_ids.push(hotkey_id),
-                Err(e) => {
-                    eprintln!("failed to register keybinding {:?}: {}", hotkey.key, e);
-                }
-            }
-        }
     }
 
     fn start(&self) {
@@ -232,6 +185,9 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
         if let Err(e) = hotkey_manager_mut.unregister_all() {
             eprintln!("failed to unregister all keybindings: {}", e);
         }
+
+        let mut key_ids = self.key_ids.lock().unwrap();
+        key_ids.clear();
 
         // Set listening flag to false to stop the loop
         self.listening.store(false, Ordering::SeqCst);
