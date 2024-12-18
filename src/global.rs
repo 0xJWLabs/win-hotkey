@@ -182,22 +182,20 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
         // Set listening flag to false to stop the loop
         self.listening.store(false, Ordering::SeqCst);
 
-        // Clone necessary Arc references for the thread
-        let key_ids = self.key_ids.clone();
-
         {
-            let manager = self.manager.clone();
             // Unregister all hotkeys
-            if let Ok(mut hotkey_manager) = manager.lock() {
+            if let Ok(mut hotkey_manager) = self.manager.lock() {
                 if let Err(e) = hotkey_manager.unregister_all() {
                     eprintln!("failed to unregister all keybindings: {}", e);
                 }
             } else {
                 eprintln!("failed to acquire lock on hotkey manager for cleanup.");
             }
+        }
 
+        {
             // Clear key IDs
-            if let Ok(mut ids) = key_ids.lock() {
+            if let Ok(mut ids) = self.key_ids.lock() {
                 ids.clear();
             } else {
                 eprintln!("failed to acquire lock on key IDs for cleanup.");
