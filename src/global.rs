@@ -176,10 +176,9 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
     }
 
     fn stop(&self) -> bool {
-        if !self.listening.load(Ordering::SeqCst) {
-            return false;
-        }
-
+        // if !self.listening.load(Ordering::SeqCst) {
+        //     return false;
+        // }
         // Set listening flag to false to stop the loop
         self.listening.store(false, Ordering::SeqCst);
 

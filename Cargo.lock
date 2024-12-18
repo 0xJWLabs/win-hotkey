@@ -10,7 +10,7 @@ checksum = "c7fb8039b3032c191086b10f11f319a6e99e1e82889c5cc6046f515c9db1d497"
 
 [[package]]
 name = "win-hotkey"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "rustc-hash",
  "windows-sys",
