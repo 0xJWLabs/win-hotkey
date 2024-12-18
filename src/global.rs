@@ -76,7 +76,7 @@ pub trait GlobalHotkeyManagerImpl<T> {
     fn remove_hotkey(&self, name: String) -> Option<GlobalHotkey<T>>;
     fn start(&self);
     fn stop(&self) -> bool;
-    #[cfg(false)]
+    #[cfg(feature = "upcoming_update")]
     fn update(&mut self);
 }
 
@@ -117,7 +117,7 @@ impl<T: Send + 'static> GlobalHotkeyManagerImpl<T> for GlobalHotkeyManager<T> {
         hotkeys.remove(&key)
     }
 
-    #[cfg(false)]
+    #[cfg(feature = "upcoming_update")]
     fn update(&mut self) {
         let listening = self.listening.clone();
         let hotkey_manager = self.manager.clone();

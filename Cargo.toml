@@ -15,6 +15,7 @@ authors = ["0xJWLabs <0xJWLabs@gmail.com>"]
 [features]
 default = ["thread_safe"]
 thread_safe = []
+upcoming_update = []
 
 [dependencies]
 rustc-hash = "2.1.0"
